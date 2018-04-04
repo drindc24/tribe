@@ -44,7 +44,11 @@ orders_array.each do |order|
     possible_permutations += product_candidates.repeated_permutation(permutation_count).to_a.select { |p| (p.inject(:+) % order[:quantity].to_i) == 0 && p.inject(:+) <= order[:quantity].to_i }
   end
 
-  # error if there are no possible permutations
+  if possible_permutations.empty?
+    puts"No possible matches found."
+    next
+  end
+
 
   product_totals = []
 
