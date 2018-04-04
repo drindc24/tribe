@@ -1,16 +1,8 @@
+require "pry"
+
 order = "10 IMG 15 FLAC 13 VID"
-# order = "13 VID"
 
-PRODUCTS = [{ name: "Image5", format_code: "IMG", bundle_count: 5, price: 450 },
-            { name: "Image10", format_code: "IMG", bundle_count: 10, price: 800 },
-            { name: "Audio3", format_code: "FLAC", bundle_count: 3, price: 427.5 },
-            { name: "Audio6", format_code: "FLAC", bundle_count: 6, price: 810 },
-            { name: "Audio9", format_code: "FLAC", bundle_count: 9, price: 1147.5 },
-            { name: "Video3", format_code: "VID", bundle_count: 3, price: 570 },
-            { name: "Video5", format_code: "VID", bundle_count: 5, price: 900 },
-            { name: "Video9", format_code: "VID", bundle_count: 9, price: 1530 }]
-
-LOOKUP_PRODUCTS = {
+PRODUCTS = {
   "VID" => {
     "3" => { name: "Video3", format_code: "VID", bundle_count: 3, price: 570 },
     "5" => { name: "Video5", format_code: "VID", bundle_count: 5, price: 900 },
@@ -18,9 +10,9 @@ LOOKUP_PRODUCTS = {
   },
 
   "FLAC" => {
-      "3" => { name: "Audio3", format_code: "FLAC", bundle_count: 3, price: 427.5 },
-      "5" => { name: "Audio6", format_code: "FLAC", bundle_count: 6, price: 810 },
-      "9" => { name: "Audio9", format_code: "FLAC", bundle_count: 9, price: 1147.5 },
+      "3" => { name: "Audio3", format_code: "FLAC", bundle_count: 3, price: 427.50 },
+      "6" => { name: "Audio6", format_code: "FLAC", bundle_count: 6, price: 810 },
+      "9" => { name: "Audio9", format_code: "FLAC", bundle_count: 9, price: 1147.50 },
   },
 
   "IMG" => {
@@ -44,34 +36,35 @@ order_tokens.each_with_index do |x,i|
   end
 end
 
-# {:name=>"Image10", :format_code=>"IMG", :bundle_count=>10, :price=>800}
-# {:name=>"Image5", :format_code=>"IMG", :bundle_count=>5, :price=>450}
-# {:name=>"Audio6", :format_code=>"FLAC", :bundle_count=>9, :price=>1147.5}
-# {:name=>"Audio6", :format_code=>"FLAC", :bundle_count=>6, :price=>810}
-# {:name=>"Audio3", :format_code=>"FLAC", :bundle_count=>3, :price=>427.5}
-# {:name=>"Video9", :format_code=>"VID", :bundle_count=>9, :price=>1530}
-# {:name=>"Video5", :format_code=>"VID", :bundle_count=>5, :price=>900}
-# {:name=>"Video3", :format_code=>"VID", :bundle_count=>3, :price=>570}
-
-# [9,5,3].repeated_permutation(3).to_a.select { |p| p.inject(:+) % 13 == 0 }
-
-
-
 orders_array.each do |order|
-  puts order
+  product_candidates = PRODUCTS[order[:format_code]].map{|key, value| value[:bundle_count]}
+  possible_permutations = []
 
-  required_products = []
-
-  product_candidates = PRODUCTS.select { |p| p[:format_code] == order[:format_code] }.map { |m| m[:bundle_count] }
-  possible_permutations = product_candidates.repeated_permutation(product_candidates.length).to_a.select { |p| (p.inject(:+) % order[:quantity].to_i) == 0 }
+  (1..product_candidates.length).each do |permutation_count|
+    possible_permutations += product_candidates.repeated_permutation(permutation_count).to_a.select { |p| (p.inject(:+) % order[:quantity].to_i) == 0 && p.inject(:+) <= order[:quantity].to_i }
+  end
 
   # error if there are no possible permutations
 
-  possible_permutations[0].each do |possible_bundle|
-    required_products << LOOKUP_PRODUCTS[order[:format_code]][possible_bundle.to_s]
+  product_totals = []
+
+  possible_permutations.each do |permutation|
+    required_products = []
+
+    permutation.each do |possible_bundle|
+      required_products << PRODUCTS[order[:format_code]][possible_bundle.to_s]
+    end
+
+    product_totals << required_products.map{|product_set| product_set[:price]}.inject(:+)
   end
 
-  running_total = required_products.map{|product| product[:price]}.inject(:+)
-  puts running_total
+  permutation_index = product_totals.index(product_totals.min)
+  best_permutation = possible_permutations[permutation_index].sort.reverse!
 
+  bundle_counts = Hash.new(0)
+  best_permutation.each{|perm| bundle_counts[perm] += 1}
+
+  running_total = product_totals.min
+  puts "#{order[:quantity]} #{order[:format_code]} $#{running_total}"
+  bundle_counts.each{|key, value| puts "   #{value} x #{ key } $#{ PRODUCTS[order[:format_code]][key.to_s][:price] }"}
 end
