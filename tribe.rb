@@ -1,74 +1,127 @@
 require "pry"
+require_relative "products"
+require_relative "errors"
 
-order = "10 IMG 15 FLAC 13 VID"
+class Tribe
+  attr_accessor :order_string
 
-PRODUCTS = {
-  "VID" => {
-    "3" => { name: "Video3", format_code: "VID", bundle_count: 3, price: 570 },
-    "5" => { name: "Video5", format_code: "VID", bundle_count: 5, price: 900 },
-    "9" => { name: "Video9", format_code: "VID", bundle_count: 9, price: 1530 },
-  },
+  def initialize(order_string)
+    @order_string = order_string
+    @order = nil
 
-  "FLAC" => {
-      "3" => { name: "Audio3", format_code: "FLAC", bundle_count: 3, price: 427.50 },
-      "6" => { name: "Audio6", format_code: "FLAC", bundle_count: 6, price: 810 },
-      "9" => { name: "Audio9", format_code: "FLAC", bundle_count: 9, price: 1147.50 },
-  },
-
-  "IMG" => {
-      "5" => { name: "Image5", format_code: "IMG", bundle_count: 5, price: 450 },
-      "10" => { name: "Image10", format_code: "IMG", bundle_count: 10, price: 800 }
-  }
-}
-
-
-orders_array = []
-
-order_tokens = order.split(" ")
-
-order_tokens.each_with_index do |x,i|
-  if i%2 == 0
-    order_hash = Hash.new
-    order_hash[:quantity] = order_tokens[i]
-    order_hash[:format_code] = order_tokens[i+1]
-
-    orders_array << order_hash
-  end
-end
-
-orders_array.each do |order|
-  product_candidates = PRODUCTS[order[:format_code]].map{|key, value| value[:bundle_count]}
-  possible_permutations = []
-
-  (1..product_candidates.length).each do |permutation_count|
-    possible_permutations += product_candidates.repeated_permutation(permutation_count).to_a.select { |p| (p.inject(:+) % order[:quantity].to_i) == 0 && p.inject(:+) <= order[:quantity].to_i }
+    parse_order_string
   end
 
-  if possible_permutations.empty?
-    puts"No possible matches found."
-    next
-  end
+  def orders
+    orders_array = []
+    order_tokens = @order_string.split(" ")
+    
+    order_tokens.each_with_index do |x,i|
+      if i%2 == 0
+        raise OrderQuantityInvalid, "#{order_tokens[i]} is not a valid quantity. Valid quantity should be > 0" if order_tokens[i].to_i <= 0
 
+        order_hash = Hash.new
+        order_hash[:quantity] = order_tokens[i]
+        order_hash[:format_code] = order_tokens[i+1]
 
-  product_totals = []
-
-  possible_permutations.each do |permutation|
-    required_products = []
-
-    permutation.each do |possible_bundle|
-      required_products << PRODUCTS[order[:format_code]][possible_bundle.to_s]
+        orders_array << order_hash
+      end
     end
 
-    product_totals << required_products.map{|product_set| product_set[:price]}.inject(:+)
+    orders_array
   end
 
-  permutation_index = product_totals.index(product_totals.min)
-  best_permutation = possible_permutations[permutation_index].sort.reverse!
+  def calculate_final
+    final_invoice = {}
+    invoices = calculate_invoice
 
-  bundle_counts = Hash.new(0)
-  best_permutation.each{|perm| bundle_counts[perm] += 1}
+    invoices.each do |invoice|
+      final_invoice[invoice[:format_code]] = {}
+      final_invoice[invoice[:format_code]][:bundles] = []
+      final_invoice[invoice[:format_code]][:total] = 0
+      final_invoice[invoice[:format_code]][:total_quantity] = 0
 
-  running_total = product_totals.min
-  puts "#{order[:quantity]} #{order[:format_code]} $#{running_total}"
-  bundle_counts.each{|key, value| puts "   #{value} x #{ key } $#{ PRODUCTS[order[:format_code]][key.to_s][:price] }"}
+      invoice.each do |key, value|
+        next if key.to_s == "format_code"
+
+        price_value = PRODUCTS[invoice[:format_code]][key.to_s][:price] * value
+
+        final_invoice[invoice[:format_code]][:total] += price_value
+        final_invoice[invoice[:format_code]][:total_quantity] += key * value
+        final_invoice[invoice[:format_code]][:bundles] << { bundle_count: key, quantity: value, price: PRODUCTS[invoice[:format_code]][key.to_s][:price] * value}
+      end
+    end
+
+    final_invoice
+  end
+
+  def calculate_invoice
+    invoices = []
+
+    orders.each do |order|
+      @order = order
+      perm = best_permutation
+      invoice = Hash.new(0)
+      invoice[:format_code] = @order[:format_code]
+
+      perm.each do |p|
+        invoice[p] += 1
+      end
+
+      invoices << invoice
+    end
+
+    invoices
+  end
+
+  private
+
+  def product_totals
+    totals = []
+    possible_permutations = get_permutations
+
+    possible_permutations.each do |permutation|
+      required_products = []
+      permutation.each do |possible_bundle|
+        required_products << PRODUCTS[@order[:format_code]][possible_bundle.to_s]
+      end
+
+      totals << required_products.map{|product_set| product_set[:price]}.inject(:+)
+    end
+
+    totals
+  end
+
+  def best_permutation
+    totals = product_totals
+
+    index =  totals.index(totals.min)
+
+    get_permutations[index].sort.reverse!
+  end
+
+  def get_permutations
+    candidates = product_candidates
+    possible_permutations = []
+
+    (1..candidates.length).each do |permutation_count|
+      possible_permutations += candidates.repeated_permutation(permutation_count).to_a.select { |p| (p.inject(:+) % @order[:quantity].to_i) == 0 && p.inject(:+) <= @order[:quantity].to_i }
+    end
+
+    return "No possible matches for this order." if possible_permutations.empty?
+
+    possible_permutations
+  end
+
+  def product_candidates
+    raise ProductInvalid, "No product matches for #{@order[:format_code]}" unless PRODUCTS[@order[:format_code]]
+
+    PRODUCTS[@order[:format_code]].map{|key, value| value[:bundle_count]}
+  end
+
+  def parse_order_string
+    order_tokens = @order_string.split(" ")
+
+    raise OrderStringParseError, "There was an error in the order string. Please ensure that a quantity is followed by a format code. (e.g '15 IMG')" if order_tokens.length % 2 != 0
+  end
 end
