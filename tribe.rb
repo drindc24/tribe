@@ -36,19 +36,23 @@ class Tribe
     invoices = calculate_invoice
 
     invoices.each do |invoice|
-      final_invoice[invoice[:format_code]] = {}
-      final_invoice[invoice[:format_code]][:bundles] = []
-      final_invoice[invoice[:format_code]][:total] = 0
-      final_invoice[invoice[:format_code]][:total_quantity] = 0
+      if invoice.has_key?(:error)
+        final_invoice[invoice[:format_code]] = invoice
+      else
+        final_invoice[invoice[:format_code]] = {}
+        final_invoice[invoice[:format_code]][:bundles] = []
+        final_invoice[invoice[:format_code]][:total] = 0
+        final_invoice[invoice[:format_code]][:total_quantity] = 0
 
-      invoice.each do |key, value|
-        next if key.to_s == "format_code"
+        invoice.each do |key, value|
+          next if key.to_s == "format_code"
 
-        price_value = PRODUCTS[invoice[:format_code]][key.to_s][:price] * value
+          price_value = PRODUCTS[invoice[:format_code]][key.to_s][:price] * value
 
-        final_invoice[invoice[:format_code]][:total] += price_value
-        final_invoice[invoice[:format_code]][:total_quantity] += key * value
-        final_invoice[invoice[:format_code]][:bundles] << { bundle_count: key, quantity: value, price: PRODUCTS[invoice[:format_code]][key.to_s][:price] * value}
+          final_invoice[invoice[:format_code]][:total] += price_value
+          final_invoice[invoice[:format_code]][:total_quantity] += key * value
+          final_invoice[invoice[:format_code]][:bundles] << { bundle_count: key, quantity: value, price: PRODUCTS[invoice[:format_code]][key.to_s][:price] * value}
+        end
       end
     end
 
@@ -60,15 +64,24 @@ class Tribe
 
     orders.each do |order|
       @order = order
-      perm = best_permutation
-      invoice = Hash.new(0)
-      invoice[:format_code] = @order[:format_code]
 
-      perm.each do |p|
-        invoice[p] += 1
+      begin
+        perm = best_permutation
+        invoice = Hash.new(0)
+        invoice[:format_code] = @order[:format_code]
+
+        perm.each do |p|
+          invoice[p] += 1
+        end
+
+        invoices << invoice
+      rescue NoPossibleMatches => e
+        error_hash = {}
+        error_hash[:total_quantity] = @order[:quantity]
+        error_hash[:format_code] = @order[:format_code]
+        error_hash[:error] = "No possible matches for this order."
+        invoices << error_hash
       end
-
-      invoices << invoice
     end
 
     invoices
@@ -108,7 +121,7 @@ class Tribe
       possible_permutations += candidates.repeated_permutation(permutation_count).to_a.select { |p| (p.inject(:+) % @order[:quantity].to_i) == 0 && p.inject(:+) <= @order[:quantity].to_i }
     end
 
-    return "No possible matches for this order." if possible_permutations.empty?
+    raise NoPossibleMatches, "No possible matches for this order." if possible_permutations.empty?
 
     possible_permutations
   end
