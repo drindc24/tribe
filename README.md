@@ -50,5 +50,9 @@ It's easy! From your terminal, assuming you've already installed Ruby, you can r
  1 x 3 $570
 ```
 
+**Specs**
 
+After [installing RSpec](https://github.com/rspec/rspec), run your specs:
+
+`rspec spec/tribe_spec.rb`
 
