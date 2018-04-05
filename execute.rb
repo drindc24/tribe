@@ -1,6 +1,6 @@
 require_relative "tribe"
 
-tribe = Tribe.new("10 IMG 15 FLAC 13 VID")
+tribe = Tribe.new(ARGV[0])
 
 invoice = tribe.calculate_final
 
