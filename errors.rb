@@ -1,3 +1,4 @@
+class OrderStringMissing < StandardError; end
 class OrderStringParseError < StandardError; end
 class OrderQuantityInvalid < StandardError; end
 class ProductInvalid < StandardError; end

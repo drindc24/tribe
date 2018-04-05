@@ -19,6 +19,7 @@ class Tribe
     order_tokens.each_with_index do |x,i|
       if i%2 == 0
         raise OrderQuantityInvalid, "#{order_tokens[i]} is not a valid quantity. Valid quantity should be > 0" if order_tokens[i].to_i <= 0
+        raise ProductInvalid, "#{order_tokens[i+1]} is not a valid product." unless PRODUCTS.keys.include?(order_tokens[i+1])
 
         order_hash = Hash.new
         order_hash[:quantity] = order_tokens[i]
@@ -87,7 +88,22 @@ class Tribe
     invoices
   end
 
+  def parse_order_string
+    order_tokens = @order_string.split(" ")
+
+    raise OrderStringParseError, "There was an error in the order string. Please ensure that a quantity is followed by a format code. (e.g '15 IMG')" if order_tokens.length % 2 != 0
+  end
+
+
   private
+
+  def best_permutation
+    totals = product_totals
+
+    index =  totals.index(totals.min)
+
+    get_permutations[index].sort.reverse!
+  end
 
   def product_totals
     totals = []
@@ -103,14 +119,6 @@ class Tribe
     end
 
     totals
-  end
-
-  def best_permutation
-    totals = product_totals
-
-    index =  totals.index(totals.min)
-
-    get_permutations[index].sort.reverse!
   end
 
   def get_permutations
@@ -130,11 +138,5 @@ class Tribe
     raise ProductInvalid, "No product matches for #{@order[:format_code]}" unless PRODUCTS[@order[:format_code]]
 
     PRODUCTS[@order[:format_code]].map{|key, value| value[:bundle_count]}
-  end
-
-  def parse_order_string
-    order_tokens = @order_string.split(" ")
-
-    raise OrderStringParseError, "There was an error in the order string. Please ensure that a quantity is followed by a format code. (e.g '15 IMG')" if order_tokens.length % 2 != 0
   end
 end
